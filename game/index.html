@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NEON HARBOR — a getaway-driver story</title>
+<style>
+  html, body { margin:0; padding:0; height:100%; overflow:hidden; background:#04060d;
+    font-family:"Segoe UI", "Helvetica Neue", Arial, sans-serif; color:#e8f2ff;
+    -webkit-user-select:none; user-select:none; }
+  #game-canvas { position:fixed; inset:0; display:block; }
+  .hud { position:fixed; z-index:10; pointer-events:none; text-shadow:0 1px 3px #000, 0 0 8px rgba(0,0,0,.7); }
+  /* top-left: money + bounty */
+  #wallet { top:14px; left:16px; }
+  #cash { font-size:26px; font-weight:700; color:#7dff9a; letter-spacing:.5px; }
+  #bounty-line { font-size:13px; color:#ffb3c2; margin-top:2px; }
+  #bounty-line b { color:#ff5d7e; }
+  /* top-right: wanted + minimap */
+  #wanted-box { top:12px; right:16px; text-align:right; }
+  #stars { font-size:26px; letter-spacing:3px; color:#ffd94d; height:30px; }
+  #stars .off { color:rgba(255,255,255,.18); }
+  #minimap { margin-top:6px; border:2px solid rgba(120,200,255,.45); border-radius:8px;
+    background:rgba(4,10,20,.72); box-shadow:0 0 18px rgba(0,0,0,.6); }
+  /* health + speed bottom-right */
+  #vitals { right:16px; bottom:16px; text-align:right; }
+  #health-wrap { width:190px; height:12px; background:rgba(255,255,255,.14); border:1px solid rgba(255,255,255,.35);
+    border-radius:6px; overflow:hidden; margin-left:auto; }
+  #health-bar { height:100%; width:100%; background:linear-gradient(90deg,#ff4d6d,#ffb3c2); transition:width .15s; }
+  #speed { font-size:30px; font-weight:700; color:#aee6ff; margin-top:4px; }
+  #speed small { font-size:12px; color:#9fb6cc; font-weight:400; }
+  #radio-line { font-size:12px; color:#8fd0ff; min-height:15px; }
+  /* objective top-center */
+  #objective { top:14px; left:50%; transform:translateX(-50%); text-align:center; width:min(620px,60vw); }
+  #objective .obj-title { font-size:13px; letter-spacing:2px; color:#ffd94d; text-transform:uppercase; }
+  #objective .obj-text { font-size:17px; font-weight:600; color:#fff; margin-top:2px; }
+  #objective .obj-dist { font-size:13px; color:#aee6ff; }
+  /* center prompt + toast */
+  #prompt { left:50%; bottom:23%; transform:translateX(-50%); font-size:17px; font-weight:600;
+    background:rgba(3,8,16,.66); padding:8px 18px; border-radius:20px; border:1px solid rgba(140,210,255,.35); display:none; }
+  #prompt b { color:#ffd94d; }
+  #toast { left:50%; top:19%; transform:translateX(-50%); font-size:21px; font-weight:700; color:#fff;
+    text-align:center; opacity:0; transition:opacity .3s; }
+  #toast .sub { display:block; font-size:14px; font-weight:400; color:#aee6ff; margin-top:3px; }
+  #busted-meter { left:50%; bottom:31%; transform:translateX(-50%); width:240px; display:none; text-align:center; }
+  #busted-meter .lbl { font-size:13px; letter-spacing:3px; color:#ff5d7e; font-weight:700; }
+  #busted-wrap { height:10px; background:rgba(255,255,255,.15); border-radius:5px; overflow:hidden; margin-top:4px; }
+  #busted-bar { height:100%; width:0%; background:#ff5d7e; }
+  /* phone bottom-left */
+  #phone { left:16px; bottom:16px; width:308px; background:rgba(5,10,18,.78); border:1px solid rgba(120,200,255,.35);
+    border-radius:12px; padding:10px 12px; display:none; box-shadow:0 4px 24px rgba(0,0,0,.55); }
+  #phone .who { font-size:12px; letter-spacing:1px; color:#8fd0ff; text-transform:uppercase; margin-bottom:3px; }
+  #phone .who b { color:#ffd94d; }
+  #phone .msg { font-size:14.5px; line-height:1.35; color:#f2f8ff; min-height:38px; }
+  /* full-screen overlays */
+  .screen { position:fixed; inset:0; z-index:30; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; text-align:center; background:radial-gradient(ellipse at 50% 38%, rgba(10,24,44,.55), rgba(2,4,9,.88) 75%); }
+  .screen h1 { font-size:min(76px,11vw); margin:0; letter-spacing:6px; font-weight:900;
+    background:linear-gradient(180deg,#aef3ff 15%,#3ec6ff 45%,#ff5da2 90%); -webkit-background-clip:text; background-clip:text; color:transparent;
+    filter:drop-shadow(0 0 22px rgba(62,198,255,.45)); }
+  .screen h2 { font-size:34px; margin:0 0 6px; letter-spacing:4px; }
+  .screen .tag { color:#ffb3d9; font-size:16px; letter-spacing:3px; margin-top:6px; text-transform:uppercase; }
+  .screen p { color:#c9dcf2; font-size:15px; line-height:1.55; max-width:560px; }
+  .screen .btns { margin-top:22px; display:flex; gap:14px; }
+  .screen button { pointer-events:auto; cursor:pointer; font-size:17px; font-weight:700; letter-spacing:1px;
+    color:#06121f; background:linear-gradient(180deg,#8fe3ff,#38b6f6); border:none; border-radius:8px; padding:12px 30px;
+    box-shadow:0 0 18px rgba(62,198,255,.5); }
+  .screen button:hover { filter:brightness(1.12); }
+  .screen button.ghost { background:rgba(20,34,54,.85); color:#aee6ff; border:1px solid rgba(140,210,255,.5); box-shadow:none; }
+  .screen .keys { margin-top:26px; font-size:12.5px; color:#7e97b3; line-height:1.9; }
+  .screen .keys b { color:#cfe8ff; background:rgba(255,255,255,.1); padding:1px 7px; border-radius:4px; }
+  #screen-busted h2 { color:#ff5d7e; } #screen-wasted h2 { color:#ff4d4d; }
+  .hidden { display:none !important; }
+  #fade { position:fixed; inset:0; background:#000; z-index:40; pointer-events:none; opacity:0; transition:opacity .45s; }
+  #vignette { position:fixed; inset:0; z-index:5; pointer-events:none;
+    background:radial-gradient(ellipse at center, transparent 58%, rgba(0,0,10,.5) 100%); }
+</style>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
+</head>
+<body>
+<canvas id="game-canvas"></canvas>
+<div id="vignette"></div>
+
+<div id="hud-root" class="hidden">
+  <div id="wallet" class="hud">
+    <div id="cash">$0</div>
+    <div id="bounty-line">BOUNTY <b>$0</b></div>
+  </div>
+  <div id="wanted-box" class="hud">
+    <div id="stars"></div>
+    <canvas id="minimap" width="216" height="216"></canvas>
+  </div>
+  <div id="objective" class="hud">
+    <div class="obj-title" id="obj-title"></div>
+    <div class="obj-text" id="obj-text"></div>
+    <div class="obj-dist" id="obj-dist"></div>
+  </div>
+  <div id="vitals" class="hud">
+    <div id="radio-line"></div>
+    <div id="health-wrap"><div id="health-bar"></div></div>
+    <div id="speed">0 <small>KM/H</small></div>
+  </div>
+  <div id="prompt" class="hud"></div>
+  <div id="toast" class="hud"></div>
+  <div id="busted-meter" class="hud"><div class="lbl">BUSTED</div><div id="busted-wrap"><div id="busted-bar"></div></div></div>
+  <div id="phone" class="hud"><div class="who" id="phone-who"></div><div class="msg" id="phone-msg"></div></div>
+</div>
+
+<div id="screen-title" class="screen">
+  <h1>NEON HARBOR</h1>
+  <div class="tag">The city is watching. Drive like it matters.</div>
+  <p>Ren Kade was the best wheelman on the docks — until one job went bad. Now he drives for Mama Ivo,
+     the whole harbor wants a piece of him, and every billboard in the rain carries his face.</p>
+  <div class="btns">
+    <button id="btn-new">NEW GAME</button>
+    <button id="btn-continue" class="ghost">CONTINUE</button>
+  </div>
+  <div class="keys">
+    <b>W A S D</b> move / drive &nbsp; <b>Mouse</b> look &nbsp; <b>Shift</b> sprint &nbsp; <b>Space</b> jump / handbrake<br>
+    <b>E</b> enter / steal car · interact &nbsp; <b>F</b> punch · <b>Click</b> shoot (once armed) &nbsp; <b>R</b> radio &nbsp; <b>P</b> pause &nbsp; <b>M</b> mute
+  </div>
+</div>
+
+<div id="screen-pause" class="screen hidden">
+  <h2>PAUSED</h2>
+  <p id="pause-stats"></p>
+  <div class="btns">
+    <button id="btn-resume">RESUME</button>
+    <button id="btn-quit-title" class="ghost">TITLE SCREEN</button>
+  </div>
+</div>
+
+<div id="screen-busted" class="screen hidden">
+  <h2>BUSTED</h2>
+  <p id="busted-text">The Harbor Patrol got you.</p>
+  <div class="btns"><button id="btn-busted-ok">PAY THE FINE</button></div>
+</div>
+
+<div id="screen-wasted" class="screen hidden">
+  <h2>WASTED</h2>
+  <p id="wasted-text">You wake up at Saint-9 General.</p>
+  <div class="btns"><button id="btn-wasted-ok">LEAVE HOSPITAL</button></div>
+</div>
+
+<div id="fade"></div>
+
+<script type="module" src="./js/main.js"></script>
+</body>
+</html>
